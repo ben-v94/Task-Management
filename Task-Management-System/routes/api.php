@@ -9,13 +9,6 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\TaskController;
 use App\Models\Task;  
 use App\Models\User;  
-use App\Mail\WelcomeMail;
-
-
-Route::get('/user', function (Request $request) {
-
-    return $request->user();
-})->middleware('auth:sanctum');
 
 
 Route::post('/register',[ AuthController::class,'register']);

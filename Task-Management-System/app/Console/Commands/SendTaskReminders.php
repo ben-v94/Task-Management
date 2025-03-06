@@ -5,6 +5,8 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use App\Models\Task;
 use App\Models\User;
+use App\Jobs\SendReminderEmail;
+use App\Jobs\SendOverdueEmail;
 use Illuminate\Support\Facades\Mail;
 
 class SendTaskReminders extends Command
@@ -14,54 +16,48 @@ class SendTaskReminders extends Command
      *
      * @var string
      */
-    protected $signature = 'remind';
+    protected $signature = 'remind-users';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Command description';
+    protected $description = 'Send task reminders for pending and in-progress tasks';
 
     /**
      * Execute the console command.
      */
     public function handle()
     {
-        $tasks = Task::where(function($query) 
-        {
-                        $query->where('status', 'pending')->orWhere('status', 'in-progress');
-        })
-                    ->where('due_date', '<', now())->get();
+        $tasks = Task::whereIn('status', ['pending', 'in-progress'])->get();
 
-        foreach ($tasks as $task) 
+        foreach ($tasks as $task)
         {
             $assignedUser = User::find($task->assigned_to);
-            
-            $this->sendReminderEmail($assignedUser, $task);
-            
+
+            SendReminderEmail::dispatch($task, $assignedUser);
+
             if ($task->due_date < now()) 
             {
-                $this->sendOverdueEmail($assignedUser, $task);
+                SendOverdueEmail::disptach($task, $assignedUser);
             }
+        }
+
+        $this->info('Task reminders sent successfully.');
     }
 
-    $this->info('Task reminders sent successfully.');
-    }
-
-    protected function sendReminderEmail($user, $task)
-    {
-        Mail::raw("You have a pending task: {$task->title}. Due date: {$task->due_date}.", function ($message) use ($user)
-        {
-            $message->to($user->email)->subject('Task Reminder');
-        });
-    }
-
-    protected function sendOverdueEmail($user, $task)
-    {
-        Mail::raw("The task '{$task->title}' is overdue. Please complete it as soon as possible.", function ($message) use ($user) 
-        {
-            $message->to($user->email)->subject('Overdue Task');
-        });
-    }
+    /**
+     * Send an overdue email.
+     *
+     * @param Task $task
+     * @param User $user
+     * @return void
+     */
+    // protected function sendOverdueEmail($task, $user)
+    // {
+    //     Mail::raw("The task '{$task->title}' is overdue. Please complete it as soon as possible.", function ($message) use ($user) {
+    //         $message->to($user->email)->subject('Overdue Task');
+    //     });
+    // }
 }

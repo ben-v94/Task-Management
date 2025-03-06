@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use App\Http\Requests\User\StoreUserRequest;
+use App\Http\Requests\User\UpdateUserRequest;
 
 class UserController extends Controller
 {
@@ -15,28 +17,26 @@ class UserController extends Controller
     public function index()
     {
         $this->authorize('viewAny', User::class);
-        return User::all();
+        return User::paginate(20);
     }
+    
 
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(StoreUserRequest $request)
     {
-        $input = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|string|min:8|confirmed',
-            'role' => 'required|in:user,admin',
-        ]);
-    
+        if (!$this->isAdmin()) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+
         $user = User::create([
-            'name' => $input['name'],
-            'email' => $input['email'],
-            'password' => Hash::make($input['password']),
-            'role' => $input['role'],
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+            'role' => $request->role,
         ]);
-    
+
         return response()->json(['message' => 'User created successfully', 'user' => $user], 201);
     }
     
@@ -52,19 +52,19 @@ class UserController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(UpdateUserRequest $request, string $id)
     {
         $user = User::findOrFail($id);
 
-        $this->authorize('update', $user);
-    
-        $input = $request->validate([
-            'name'  => 'nullable|string|max:255',
-            'email' => 'nullable|email|unique:users,email,' . $user->id,
-            'role'  => 'nullable|string|in:user,admin'
+        if (!$this->isAdmin()) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+
+        $user->update([
+            'name' => $request->name ?? $user->name,
+            'email' => $request->email ?? $user->email,
+            'role' => $request->role ?? $user->role,
         ]);
-    
-        $user->update($input);
     
         return response()->json(['message' => 'User updated successfully', 'user' => $user]);
     }
@@ -75,10 +75,12 @@ class UserController extends Controller
     public function destroy(string $id)
     {
         $user = User::findOrFail($id);
-        $this->authorize('delete', $user);
 
-        if (auth()->user()->id == $user->id) 
-        {
+        if (!$this->isAdmin()) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+
+        if (auth()->user()->id == $user->id) {
             return response()->json(['error' => 'You cannot delete yourself'], 403);
         }
 

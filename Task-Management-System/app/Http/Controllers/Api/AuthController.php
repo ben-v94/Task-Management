@@ -7,22 +7,21 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\RegisterRequest;
+use App\Http\Requests\Auth\LoginRequest;
+use App\Http\Requests\Auth\UpdateUserRequest;
+use App\Http\Requests\Auth\ChangePasswordRequest;
 
 
 class AuthController extends Controller
 {
-    public function register(Request $request)
+    public function register(RegisterRequest $request)
     {
-        $input = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|min:8|confirmed',
-        ]);
     
         $user = User::create([
-            'name' => $input['name'],
-            'email' => $input['email'],
-            'password' => Hash::make($input['password']),
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
         ]);
     
         $token = $user->createToken('auth-token')->plainTextToken;
@@ -35,46 +34,44 @@ class AuthController extends Controller
     }
     
 
-    public function login(Request $request)
+    public function login(LoginRequest $request)
     {
-        $input = $request->validate([
-            'email' => 'required|email',
-            'password'=> 'required',
-        ]);
-        
-        $user = User::where('email',$input['email'])->first();
+        $user = User::where('email', $request->email)->first();
 
-        return $user && Hash::check($input['password'], $user->password) ?
-             ['token' => $user->createToken('auth-token')->plainTextToken] : 
-             response()->json(['error' => 'Unauthorized'], 401);
+        if ($user && Hash::check($request->password, $user->password)) 
+        {
+            $token = $user->createToken('auth-token')->plainTextToken;
+
+            return response()->json([
+                'message' => 'User logged in successfully',
+                'user' => $user,
+                'token' => $token
+            ]);
+        }
+
+        return response()->json(['error' => 'Unauthorized'], 401);
 
     }
 
     public function logout(Request $request)
     {
-     $request->user()->currentAccessToken()->delete();
-
+        auth()->user()->currentAccessToken()->delete();
 
         return ['message' => 'Logged out successfully'];            
     }
 
-    public function update(Request $request)
+    public function update(UpdateUserRequest $request)
     {
-        $user = $request->user();
+        $user = auth()->user();
 
-        $input = $request->validate([
-            'name' => 'nullable|string|max:255',
-            'email' => 'nullable|email|unique:users,email,' . $user->id,
-        ]);
-
-        if (isset($input['name'])) 
+        if (isset($request->name)) 
         {
-            $user->name = $input['name'];
+            $user->name = $request->name;
         }
 
-        if (isset($input['email'])) 
+        if (isset($request->email)) 
         {
-            $user->email = $input['email'];
+            $user->email = $request->email;
         }
 
         $user->save();
@@ -85,14 +82,9 @@ class AuthController extends Controller
         ]);
     }
 
-    public function changePassword(Request $request)
+    public function changePassword(ChangePasswordRequest $request)
     {
-        $user = $request->user();
-
-        $request->validate([
-            'current_password' => 'required',
-            'new_password' => 'required|min:8|confirmed',
-        ]);
+        $user = auth()->user();
 
         if (!Hash::check($request->current_password, $user->password)) 
         {
@@ -101,7 +93,7 @@ class AuthController extends Controller
 
         $user->password = Hash::make($request->new_password);
         $user->save();
-        $request->user()->tokens()->delete();
+        auth()->user()->tokens()->delete();
         return ['message' => 'Password changed successfully'];
     }
 
