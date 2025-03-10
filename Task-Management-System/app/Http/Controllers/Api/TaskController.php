@@ -10,6 +10,8 @@ use App\Jobs\SendTaskCompletionEmail;
 use App\Http\Requests\Task\StoreTaskRequest;
 use App\Http\Resources\Task\TaskResource;
 use App\Http\Requests\Task\UpdateTaskRequest;
+use App\Events\TaskAssigned;
+use App\Events\TaskStatusUpdated;
 
 
 class TaskController extends Controller
@@ -31,6 +33,7 @@ class TaskController extends Controller
         ]);
 
         SendTaskAssignedEmail::dispatch($task);
+        event(new TaskAssigned($task));
         
         return response()->json($task, 201);
     }
@@ -58,6 +61,8 @@ class TaskController extends Controller
            
             SendTaskCompletionEmail::dispatch($task);
         }
+
+        event(new TaskStatusUpdated($task));
 
         return response()->json(['message' => 'Task status updated successfully', 'task' => $task]);
     }
